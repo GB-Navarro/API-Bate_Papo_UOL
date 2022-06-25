@@ -19,11 +19,10 @@ mongoClient.connect().then(() => {
 app.use(express.json());
 app.use(cors());
 
-
 let participant = { name: "", lastStatus: 0 };
 const participantSchema = Joi.object({
-  name: Joi.string().min(1).required()
-})
+  name: Joi.string().min(1).required(),
+});
 
 let message = {
   from: "",
@@ -35,82 +34,100 @@ let message = {
 const messageSchema = Joi.object({
   to: Joi.string().min(1).required(),
   text: Joi.string().min(1).required(),
-  type: Joi.string().required()
-})
-
-app.get("/teste", (req, res) => {
-  console.log(messageSchema.validate({to:"2",text:"s",type:"a"}).error === undefined) //Se for undefined é válido
-})
-
+  type: Joi.string().required(),
+});
 
 app.get("/", (req, res) => {
   res.send("Hello World");
 });
 
 app.post("/participants", async (req, res) => {
-    let username = {name: req.body.name}
-    let isNameValid = await usernameValidate(username);
-    if(isNameValid){
-      let response = createParcipant(username);
-      if(response){
-        res.sendStatus(201);
-      }else{
-        console.log("Ocorreu algum erro ao criar o novo participante");
-      }
+  let username = { name: req.body.name };
+  let result = await participantValidate(username);
+  if(result === 1){
+    if(createParcipant(username)){
+      res.sendStatus(201);
     }else{
-      console.log("O nome digitado já está em uso")
-      res.sendStatus(409);
+      console.log("Ocorreu algum erro na criação do participante!");
     }
-})
+  }else if(result === 0){
+    res.sendStatus(422);
+  }else if(result === -1){
+    res.sendStatus(409);
+  }
+});
 
 app.get("/participants", async (req, res) => {
   let participants = await getParticipants();
-  res.send(participants)
-})
+  res.send(participants);
+});
 
 app.post("/messages", (req, res) => {
   message.to = req.body.to;
   message.text = req.body.text;
   message.type = req.body.type;
   message.from = req.headers.user;
-  console.log("req headers", req.headers);
-  console.log("user", req.headers.user);
-  message.time = dayjs().format('HH:MM:ss');
-  console.log("message", message);
-})
+  message.time = dayjs().format("HH:MM:ss");
+});
 
 app.listen(5000);
 
-async function usernameValidate(username){
-    let result;
-    result = await db.collection("participants").findOne(username)
-    if(result === null){
-      if(participantSchema.validate(username).error === undefined){
-        return true;
-      }
+async function participantValidate(username) {
+  let isNameValid = await checkNameExistence(username);
+  if(isNameValid){
+    let nameFormatIsValid = validateNameFormat(username);
+    if(nameFormatIsValid){
+      //retornar status de criado
+      //retorna 1
+      return 1;
     }else{
-        return false;
+      //retornar status 422
+      //retorna 0
+      return 0;
     }
+  }else{
+    //retornar status de conflito (409)
+    //retorna -1
+    return -1;
+  }
 }
 
-async function createParcipant(username){
+async function createParcipant(username) {
   participant.name = username.name;
   participant.lastStatus = Date.now();
-  try{
+  try {
     let response;
     response = await db.collection("participants").insertOne(participant);
-    if((response.acknowledged != undefined) && (response.acknowledged === true)){
+    if (response.acknowledged != undefined && response.acknowledged === true) {
       return true;
-    }else{
+    } else {
       return false;
     }
-  } catch(error){
+  } catch (error) {
     console.log("Ocorreu um erro: ", error);
     return false;
   }
 }
+async function checkNameExistence(username){
+  let result;
+  result = await db.collection("participants").findOne(username);
+  if (result === null) {
+    return true;
+  } else {
+    return false;
+  }
+}
 
-async function getParticipants(){
-  let result = await db.collection("participants").find().toArray()
+function validateNameFormat(username){
+  let result = participantSchema.validate(username).error
+  if(result === undefined){
+    return true;
+  }else{
+    return false;
+  }
+}
+
+async function getParticipants() {
+  let result = await db.collection("participants").find().toArray();
   return result;
 }

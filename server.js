@@ -45,10 +45,15 @@ app.post("/participants", async (req, res) => {
       res.sendStatus(409);
     }
 })
+
+app.get("/participants", async (req, res) => {
+  let participants = await getParticipants();
+  res.send(participants)
+})
+
 app.listen(5000);
 
 async function usernameValidate(username){
-    //OK
     let result;
     result = await db.collection("participants").findOne(username)
     if(result === null){
@@ -73,4 +78,9 @@ async function createParcipant(username){
     console.log("Ocorreu um erro: ", error);
     return false;
   }
+}
+
+async function getParticipants(){
+  let result = await db.collection("participants").find().toArray()
+  return result;
 }

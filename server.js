@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
+import dayjs from "dayjs";
+import Joi from "joi";
 
 dotenv.config();
 
@@ -17,14 +19,29 @@ mongoClient.connect().then(() => {
 app.use(express.json());
 app.use(cors());
 
+
 let participant = { name: "", lastStatus: 0 };
+const participantSchema = Joi.object({
+  name: Joi.string().min(1).required()
+})
+
 let message = {
-  from: "João",
-  to: "Todos",
-  text: "oi galera",
-  type: "message",
-  time: "20:04:37",
+  from: "",
+  to: "",
+  text: "",
+  type: "",
+  time: "",
 };
+const messageSchema = Joi.object({
+  to: Joi.string().min(1).required(),
+  text: Joi.string().min(1).required(),
+  type: Joi.string().required()
+})
+
+app.get("/teste", (req, res) => {
+  console.log(messageSchema.validate({to:"2",text:"s",type:"a"}).error === undefined) //Se for undefined é válido
+})
+
 
 app.get("/", (req, res) => {
   res.send("Hello World");
@@ -51,13 +68,26 @@ app.get("/participants", async (req, res) => {
   res.send(participants)
 })
 
+app.post("/messages", (req, res) => {
+  message.to = req.body.to;
+  message.text = req.body.text;
+  message.type = req.body.type;
+  message.from = req.headers.user;
+  console.log("req headers", req.headers);
+  console.log("user", req.headers.user);
+  message.time = dayjs().format('HH:MM:ss');
+  console.log("message", message);
+})
+
 app.listen(5000);
 
 async function usernameValidate(username){
     let result;
     result = await db.collection("participants").findOne(username)
     if(result === null){
+      if(participantSchema.validate(username).error === undefined){
         return true;
+      }
     }else{
         return false;
     }

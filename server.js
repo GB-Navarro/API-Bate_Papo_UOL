@@ -45,7 +45,7 @@ app.get("/", (req, res) => {
 });
 
 app.post("/participants", async (req, res) => {
-  let username = { name: req.body.name };
+  let username = await { name: req.body.name };
   let result = await participantValidate(username);
   if(result === 1){
     if(createParcipant(username)){
@@ -67,6 +67,7 @@ app.get("/participants", async (req, res) => {
 
 app.post("/messages", async (req, res) => {
   let messageWasCreated = await createMessage(req.body, req.headers);
+  console.log(req.headers.user);
   if(messageWasCreated){
     res.sendStatus(201);
   }else{
@@ -86,12 +87,26 @@ app.get("/messages", async (req, res) => {
       for(let i = 0; i < limit; i++){
         limitedMessages.push(userMessages[i]);
       }
-      console.log("l",limitedMessages)
       res.send(limitedMessages);
     }
   }else{
     res.send(userMessages);
   }
+})
+
+app.post("/status", async (req, res) => {
+  let participant = req.headers.user;
+  let participantIsOnTheList = await verifyParticipants(participant);
+  if(participantIsOnTheList){
+    let participantData = await getParticipant(participant);
+    let participantStatusIsUpdated = await updateParticipantStatus(participantData);
+    if(participantStatusIsUpdated){
+      res.sendStatus(200);
+    }
+  }else{
+    res.sendStatus(404);
+  }
+
 })
 
 app.listen(5000);
@@ -180,3 +195,62 @@ async function getUserMessages(user){
   })
   return userMessages;
 }
+
+async function verifyParticipants(participant){
+  participantsArray = await getParticipants();
+  if(participantsArray.find((element) => element.name === participant) != undefined){
+    return true;
+  }else{
+    return false;
+  }
+}
+
+async function getParticipant(participant){
+  let result = await db.collection("participants").findOne({name: participant});
+  return result;
+}
+
+async function updateParticipantStatus(participantData){
+  try{
+    let result = await db.collection("participants").updateOne({_id: participantData._id}, {$set: {lastStatus: Date.now()}});
+    if(result.acknowledged === true){
+      return true;
+    }else{
+      return false;
+    }
+  }catch{
+    console.log("Ocorreu um erro ao tentar atualizar os dados do participante!");
+    return false;
+  }
+}
+
+async function removeInactiveParticipant(){
+  let participantsArray = await getParticipants();
+  participantsArray.forEach( async (participant) => {
+    let result = (Date.now() - participant.lastStatus)
+    if(result > 10000){
+      let result = await db.collection("participants").deleteOne({_id: participant._id})
+      if(result.deletedCount === 1){
+        //foi deletado
+        sendRemovedUserMessage(participant.name);
+      }
+    } // conferir essa conta
+  }) 
+}
+
+async function sendRemovedUserMessage(participant){
+  console.log("1");
+  let removedUserMessage = {
+    from: participant,
+    to: "Todos",
+    text: "sai da sala...",
+    type: "status",
+    time: dayjs().format("HH:MM:ss")
+  }
+  let result = await db.collection("messages").insertOne(removedUserMessage);
+  if(result.acknowledged === true){
+    console.log("removeu");
+  }
+}
+
+//setInterval(removeInactiveParticipant, 15000);

@@ -130,7 +130,6 @@ async function createParcipant(username) {
   participant.lastStatus = Date.now();
   try {
     let response = await db.collection("participants").insertOne(participant);
-    console.log(response);
     if (response.acknowledged != undefined && response.acknowledged === true) {
       return true;
     } else {
@@ -261,4 +260,4 @@ async function sendRemovedUserMessage(participant){
   await db.collection("messages").insertOne(removedUserMessage);
 }
 
-//setInterval(removeInactiveParticipant, 15000);
+setInterval(removeInactiveParticipant, 15000);

@@ -34,10 +34,11 @@ let message = {
   time: "",
 };
 const messageSchema = Joi.object({
-  //from:Joi.string().valid().required(),
+  from: Joi.string().min(1).required(),
   to: Joi.string().min(1).required(),
   text: Joi.string().min(1).required(),
   type: Joi.string().valid('message','private_message').required(),
+  time: Joi.string().required()
 });
 
 app.get("/", (req, res) => {
@@ -67,7 +68,6 @@ app.get("/participants", async (req, res) => {
 
 app.post("/messages", async (req, res) => {
   let messageWasCreated = await createMessage(req.body, req.headers);
-  console.log(req.headers.user);
   if(messageWasCreated){
     res.sendStatus(201);
   }else{
@@ -130,6 +130,7 @@ async function createParcipant(username) {
   participant.lastStatus = Date.now();
   try {
     let response = await db.collection("participants").insertOne(participant);
+    console.log(response);
     if (response.acknowledged != undefined && response.acknowledged === true) {
       return true;
     } else {
@@ -170,13 +171,24 @@ async function createMessage(bodyData, headerData){
   message.from = headerData.user;
   message.time = dayjs().format("HH:MM:ss");
 
-  let promisse = await db.collection("messages").insertOne(message);
-  if(promisse.acknowledged === true){
-    // a mensagem foi armazenada no banco de dados
-    return true;
+  let participants = await getParticipants();
+  if(participants.find((participant) => participant.name === message.from) != undefined){
+    let validationResult = messageSchema.validate(message).error;
+    if(validationResult === undefined){
+      let promisse = await db.collection("messages").insertOne(message);
+      if(promisse.acknowledged === true){
+        // a mensagem foi armazenada no banco de dados
+        return true;
+      }else{
+        // a mensagem não foi armazenada no banco de dados
+        return false;
+      }
+    }else{
+      return false; // não passou na validação
+    }
   }else{
-    // a mensagem não foi armazenada no banco de dados
     return false;
+    // o usuário não está na lista
   }
 }
 
@@ -187,7 +199,7 @@ async function getAllMessages(){
 
 async function getUserMessages(user){
   let userMessages = [];
-  messagesArray = await(getAllMessages());
+  messagesArray = await getAllMessages();
   messagesArray.reverse().forEach((element, i) => {
     if(element.to === "Todos" || element.to === user || element.from === user){
       userMessages.push(messagesArray[i])
@@ -239,7 +251,6 @@ async function removeInactiveParticipant(){
 }
 
 async function sendRemovedUserMessage(participant){
-  console.log("1");
   let removedUserMessage = {
     from: participant,
     to: "Todos",
@@ -247,10 +258,7 @@ async function sendRemovedUserMessage(participant){
     type: "status",
     time: dayjs().format("HH:MM:ss")
   }
-  let result = await db.collection("messages").insertOne(removedUserMessage);
-  if(result.acknowledged === true){
-    console.log("removeu");
-  }
+  await db.collection("messages").insertOne(removedUserMessage);
 }
 
 //setInterval(removeInactiveParticipant, 15000);
